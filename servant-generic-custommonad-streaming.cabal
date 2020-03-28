@@ -19,6 +19,7 @@ executable servant-generic-custommonad-streaming
   default-language:    Haskell2010
   ghc-options:         -Wall
   build-depends:       base >= 4.7 && < 5
+                     , bytestring
                      , servant
                      , servant-client
                      , servant-server
@@ -26,3 +27,7 @@ executable servant-generic-custommonad-streaming
                      , http-client
                      , http-types
                      , transformers
+                     , unliftio
+                     , wai
+                     , warp
+                     , http-media
