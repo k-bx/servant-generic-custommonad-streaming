@@ -40,24 +40,20 @@ instance MimeRender GZip BL.ByteString where
   mimeRender _ val = val
 
 instance MimeUnrender GZip BL.ByteString where
-  mimeUnrenderWithType _ "application/gzip" _bs = Right ""
+  mimeUnrenderWithType _ "application/gzip" bs = Right bs
   mimeUnrenderWithType _ mt _bs = Left $ "Mime must be application/gzip, but it's: " ++ show mt
 
 data APIG route
   = APIG
       { __ping :: route :- "api" :> "ping" :> Get '[PlainText] String,
-        __downloadFile :: route :- "api" :> "download-file" :> Post '[GZip] BL.ByteString,
-        __downloadFile2 ::
-          route :- "api" :> "download-file2"
-            :> StreamPost NoFraming OctetStream (SourceIO B.ByteString)
+        __downloadFile :: route :- "api" :> "download-file" :> Post '[GZip] BL.ByteString
       }
   deriving (Generic)
 
 serverG :: APIG (Servant.Server.Generic.AsServerT AppM)
 serverG = APIG
   { __ping = ping,
-    __downloadFile = downloadFile,
-    __downloadFile2 = downloadFile2
+    __downloadFile = downloadFile
   }
 
 ping :: AppM String
@@ -73,19 +69,15 @@ nt :: Env -> AppM a -> Servant.Server.Handler a
 nt s x = Servant.Server.Handler $ ExceptT $ UnliftIO.try $ runReaderT x s
 
 cliRoutes :: ClientEnv -> APIG (Servant.Client.Generic.AsClientT AppM)
-cliRoutes _env =
-  undefined -- ?
-  -- Servant.Client.Generic.genericClientHoist
-  --   (\x -> liftIO (runClientM x env >>= either throwIO return))
+cliRoutes env =
+  Servant.Client.Generic.genericClientHoist
+    (\x -> liftIO (runClientM x env >>= either throwIO return))
 
 cliPing :: ClientEnv -> AppM String
 cliPing env = __ping (cliRoutes env)
 
 cliDownloadFile :: ClientEnv -> AppM BL.ByteString
 cliDownloadFile env = __downloadFile (cliRoutes env)
-
-cliDownloadFile2 :: ClientEnv -> AppM (SourceIO B.ByteString)
-cliDownloadFile2 env = __downloadFile2 (cliRoutes env)
 
 main :: IO ()
 main = do
