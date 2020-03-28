@@ -8,26 +8,27 @@ module Main where
 
 import Control.Monad.Trans.Except
 import Control.Monad.Trans.Reader
-import Data.Aeson
 import qualified Data.ByteString.Lazy as BL
 import Data.Proxy
 import GHC.Generics
-import Network.HTTP.Client (defaultManagerSettings, newManager)
+import qualified Network.HTTP.Client
 import Network.HTTP.Media ((//))
 import qualified Network.Wai as Wai
 import qualified Network.Wai.Handler.Warp as Warp
 import Servant
-import Servant.API
 import Servant.API.Generic ((:-))
 import qualified Servant.API.Generic
 import Servant.Client
-import qualified Servant.Client.Streaming as S
+import qualified Servant.Client.Generic
 import qualified Servant.Server
-import Servant.Server.Experimental.Auth (AuthHandler)
 import qualified Servant.Server.Generic
-import Servant.Types.SourceT (foreach)
 import System.Environment (getArgs)
-import qualified UnliftIO
+import UnliftIO
+
+-- import Servant.API
+-- import qualified Servant.Client
+-- import qualified Servant.Client.Streaming as S
+-- import Servant.Types.SourceT (foreach)
 
 data Env = Env {}
 
@@ -69,6 +70,20 @@ downloadFile = pure "BYTESTRINGCONTENTS"
 nt :: Env -> AppM a -> Servant.Server.Handler a
 nt s x = Servant.Server.Handler $ ExceptT $ UnliftIO.try $ runReaderT x s
 
+cliRoutes :: ClientEnv -> APIG (Servant.Client.Generic.AsClientT AppM)
+cliRoutes env =
+  Servant.Client.Generic.genericClientHoist
+    (\x -> liftIO (runClientM x env >>= either throwIO return))
+
+cliPing :: ClientEnv -> AppM String
+cliPing env = __ping (cliRoutes env)
+
+cliDownloadFile :: ClientEnv -> AppM BL.ByteString
+cliDownloadFile env = __downloadFile (cliRoutes env)
+
+cliDownloadFile2 :: ClientEnv -> AppM BL.ByteString
+cliDownloadFile2 _env = undefined
+
 main :: IO ()
 main = do
   args <- getArgs
@@ -88,5 +103,15 @@ main = do
               )
       Warp.run 6669 waiApp
     ("client" : _) -> do
-      undefined
+      let baseUrl' = BaseUrl
+            { baseUrlScheme = Http,
+              baseUrlHost = "localhost",
+              baseUrlPort = 6669,
+              baseUrlPath = ""
+            }
+      mgr <- Network.HTTP.Client.newManager (Network.HTTP.Client.defaultManagerSettings {Network.HTTP.Client.managerResponseTimeout = Network.HTTP.Client.responseTimeoutNone})
+      let cliEnv = (mkClientEnv mgr baseUrl')
+      let env = Env
+      bs <- flip runReaderT env $ cliDownloadFile cliEnv
+      putStrLn $ "> testDownloadAndFilter got bs: " <> show (BL.length bs)
     _ -> error "not implemented"

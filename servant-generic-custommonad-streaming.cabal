@@ -22,6 +22,7 @@ executable servant-generic-custommonad-streaming
                      , bytestring
                      , servant
                      , servant-client
+                     , servant-client-core
                      , servant-server
                      , aeson
                      , http-client
