@@ -9,8 +9,11 @@ import Data.Proxy
 import GHC.Generics
 import Network.HTTP.Client (defaultManagerSettings, newManager)
 import Servant.API
+import Servant.API.Generic ((:-))
 import Servant.Client
 import qualified Servant.Client.Streaming as S
+import qualified Servant.Server
+import qualified Servant.Server.Generic
 import Servant.Types.SourceT (foreach)
 
 data Position
@@ -135,6 +138,18 @@ printSourceIO :: Show a => ClientEnv -> S.ClientM (SourceIO a) -> IO ()
 printSourceIO env c = S.withClientM c env $ \e -> case e of
   Left err -> putStrLn $ "Error: " ++ show err
   Right rs -> foreach fail print rs
+
+data APIG route
+  = APIG {__ping :: route :- "api" :> "ping" :> Get '[PlainText] String}
+  deriving (Generic)
+
+serverG :: APIG (Servant.Server.Generic.AsServerT Servant.Server.Handler)
+serverG = APIG
+  { __ping = ping
+  }
+
+ping :: Servant.Server.Handler String
+ping = return "pong"
 
 main :: IO ()
 main = do
