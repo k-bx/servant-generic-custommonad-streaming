@@ -8,6 +8,7 @@ module Main where
 
 import Control.Monad.Trans.Except
 import Control.Monad.Trans.Reader
+import qualified Data.ByteString as B
 import qualified Data.ByteString.Lazy as BL
 import Data.Proxy
 import GHC.Generics
@@ -22,13 +23,9 @@ import Servant.Client
 import qualified Servant.Client.Generic
 import qualified Servant.Server
 import qualified Servant.Server.Generic
+import qualified Servant.Types.SourceT
 import System.Environment (getArgs)
 import UnliftIO
-
--- import Servant.API
--- import qualified Servant.Client
--- import qualified Servant.Client.Streaming as S
--- import Servant.Types.SourceT (foreach)
 
 data Env = Env {}
 
@@ -50,7 +47,9 @@ data APIG route
   = APIG
       { __ping :: route :- "api" :> "ping" :> Get '[PlainText] String,
         __downloadFile :: route :- "api" :> "download-file" :> Post '[GZip] BL.ByteString,
-        __downloadFile2 :: route :- "api" :> "download-file2" :> Post '[GZip] BL.ByteString
+        __downloadFile2 ::
+          route :- "api" :> "download-file2"
+            :> StreamPost NoFraming OctetStream (SourceIO B.ByteString)
       }
   deriving (Generic)
 
@@ -58,7 +57,7 @@ serverG :: APIG (Servant.Server.Generic.AsServerT AppM)
 serverG = APIG
   { __ping = ping,
     __downloadFile = downloadFile,
-    __downloadFile2 = undefined
+    __downloadFile2 = downloadFile2
   }
 
 ping :: AppM String
@@ -67,13 +66,17 @@ ping = return "pong"
 downloadFile :: AppM BL.ByteString
 downloadFile = pure "BYTESTRINGCONTENTS"
 
+downloadFile2 :: AppM (SourceIO B.ByteString)
+downloadFile2 = liftIO $ return (Servant.Types.SourceT.source ["BYTESTRINGCONTENTS2"])
+
 nt :: Env -> AppM a -> Servant.Server.Handler a
 nt s x = Servant.Server.Handler $ ExceptT $ UnliftIO.try $ runReaderT x s
 
 cliRoutes :: ClientEnv -> APIG (Servant.Client.Generic.AsClientT AppM)
-cliRoutes env =
-  Servant.Client.Generic.genericClientHoist
-    (\x -> liftIO (runClientM x env >>= either throwIO return))
+cliRoutes _env =
+  undefined -- ?
+  -- Servant.Client.Generic.genericClientHoist
+  --   (\x -> liftIO (runClientM x env >>= either throwIO return))
 
 cliPing :: ClientEnv -> AppM String
 cliPing env = __ping (cliRoutes env)
@@ -81,8 +84,8 @@ cliPing env = __ping (cliRoutes env)
 cliDownloadFile :: ClientEnv -> AppM BL.ByteString
 cliDownloadFile env = __downloadFile (cliRoutes env)
 
-cliDownloadFile2 :: ClientEnv -> AppM BL.ByteString
-cliDownloadFile2 _env = undefined
+cliDownloadFile2 :: ClientEnv -> AppM (SourceIO B.ByteString)
+cliDownloadFile2 env = __downloadFile2 (cliRoutes env)
 
 main :: IO ()
 main = do
