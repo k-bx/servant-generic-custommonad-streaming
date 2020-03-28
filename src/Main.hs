@@ -50,7 +50,7 @@ data APIG route
   = APIG
       { __ping :: route :- "api" :> "ping" :> Get '[PlainText] String,
         __downloadFile :: route :- "api" :> "download-file" :> Post '[GZip] BL.ByteString,
-        __downloadFile2 :: route :- "api" :> "download-file" :> Post '[GZip] BL.ByteString
+        __downloadFile2 :: route :- "api" :> "download-file2" :> Post '[GZip] BL.ByteString
       }
   deriving (Generic)
 
